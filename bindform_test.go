@@ -121,69 +121,52 @@ func TestBindMultipartForm(t *testing.T) {
 }
 
 func TestMarshalForm(t *testing.T) {
-	tests := []struct {
-		name      string
-		encodings map[string]RequestBodyEncoding
-	}{
-		{"default", nil},
-		{"application/x-www-form-urlencoded", map[string]RequestBodyEncoding{
-			"application/x-www-form-urlencoded": {
-				ContentType: "application/x-www-form-urlencoded",
-				Style:       "form",
-				Explode:     func(v bool) *bool { return &v }(true),
-				Required:    func(v bool) *bool { return &v }(true),
-			},
-		}},
+
+	type testSubStruct struct {
+		Int    int    `json:"int"`
+		String string `json:"string"`
 	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
+	type testStruct struct {
+		Int             int              `json:"int,omitempty"`
+		Bool            bool             `json:"bool,omitempty"`
+		String          string           `json:"string,omitempty"`
+		IntSlice        []int            `json:"int_slice,omitempty"`
+		Struct          testSubStruct    `json:"struct,omitempty"`
+		StructSlice     []testSubStruct  `json:"struct_slice,omitempty"`
+		OptInt          *int             `json:"opt_int,omitempty"`
+		OptBool         *bool            `json:"opt_bool,omitempty"`
+		OptBoolNullable *bool            `json:"opt_bool_nullable"`
+		OptString       *string          `json:"opt_string,omitempty"`
+		OptStruct       *testSubStruct   `json:"opt_struct,omitempty"`
+		OptStructSlice  *[]testSubStruct `json:"opt_struct_slice,omitempty"`
+		NotSerializable int              `json:"-"`
+		unexported      int              //nolint:unused
+	}
 
-			type testSubStruct struct {
-				Int    int    `json:"int"`
-				String string `json:"string"`
-			}
-			type testStruct struct {
-				Int             int              `json:"int,omitempty"`
-				Bool            bool             `json:"bool,omitempty"`
-				String          string           `json:"string,omitempty"`
-				IntSlice        []int            `json:"int_slice,omitempty"`
-				Struct          testSubStruct    `json:"struct,omitempty"`
-				StructSlice     []testSubStruct  `json:"struct_slice,omitempty"`
-				OptInt          *int             `json:"opt_int,omitempty"`
-				OptBool         *bool            `json:"opt_bool,omitempty"`
-				OptString       *string          `json:"opt_string,omitempty"`
-				OptStruct       *testSubStruct   `json:"opt_struct,omitempty"`
-				OptStructSlice  *[]testSubStruct `json:"opt_struct_slice,omitempty"`
-				NotSerializable int              `json:"-"`
-				unexported      int              //nolint:unused
-			}
+	testCases := map[string]testStruct{
+		"int=123":        {Int: 123},
+		"bool=true":      {Bool: true},
+		"string=example": {String: "example"},
+		"int_slice[0]=1&int_slice[1]=2&int_slice[2]=3": {IntSlice: []int{1, 2, 3}},
+		"struct[int]=789&struct[string]=abc":           {Struct: testSubStruct{Int: 789, String: "abc"}},
+		"struct_slice[0][int]=3&struct_slice[0][string]=a&struct_slice[1][int]=2&struct_slice[1][string]=b&struct_slice[2][int]=1&struct_slice[2][string]=c": {
+			StructSlice: []testSubStruct{{Int: 3, String: "a"}, {Int: 2, String: "b"}, {Int: 1, String: "c"}},
+		},
+		"opt_int=456":    {OptInt: func(v int) *int { return &v }(456)},
+		"opt_bool=true":  {OptBool: func(v bool) *bool { return &v }(true)},
+		"opt_string=def": {OptString: func(v string) *string { return &v }("def")},
+		"opt_struct[int]=456&opt_struct[string]=def": {OptStruct: &testSubStruct{Int: 456, String: "def"}},
+		"opt_struct_slice[0][int]=123&opt_struct_slice[0][string]=abc&opt_struct_slice[1][int]=456&opt_struct_slice[1][string]=def": {
+			OptStructSlice: &([]testSubStruct{{Int: 123, String: "abc"}, {Int: 456, String: "def"}}),
+		},
+	}
 
-			testCases := map[string]testStruct{
-				"int=123":        {Int: 123},
-				"bool=true":      {Bool: true},
-				"string=example": {String: "example"},
-				"int_slice[0]=1&int_slice[1]=2&int_slice[2]=3": {IntSlice: []int{1, 2, 3}},
-				"struct[int]=789&struct[string]=abc":           {Struct: testSubStruct{Int: 789, String: "abc"}},
-				"struct_slice[0][int]=3&struct_slice[0][string]=a&struct_slice[1][int]=2&struct_slice[1][string]=b&struct_slice[2][int]=1&struct_slice[2][string]=c": {
-					StructSlice: []testSubStruct{{Int: 3, String: "a"}, {Int: 2, String: "b"}, {Int: 1, String: "c"}},
-				},
-				"opt_int=456":    {OptInt: func(v int) *int { return &v }(456)},
-				"opt_bool=true":  {OptBool: func(v bool) *bool { return &v }(true)},
-				"opt_string=def": {OptString: func(v string) *string { return &v }("def")},
-				"opt_struct[int]=456&opt_struct[string]=def": {OptStruct: &testSubStruct{Int: 456, String: "def"}},
-				"opt_struct_slice[0][int]=123&opt_struct_slice[0][string]=abc&opt_struct_slice[1][int]=456&opt_struct_slice[1][string]=def": {
-					OptStructSlice: &([]testSubStruct{{Int: 123, String: "abc"}, {Int: 456, String: "def"}}),
-				},
-			}
-
-			for k, v := range testCases {
-				marshaled, err := MarshalForm(v, nil)
-				assert.NoError(t, err)
-				encoded, err := url.QueryUnescape(marshaled.Encode())
-				assert.NoError(t, err)
-				assert.Equal(t, k, encoded)
-			}
-		})
+	for k, v := range testCases {
+		marshaled, err := MarshalForm(v, nil)
+		assert.NoError(t, err)
+		encoded, err := url.QueryUnescape(marshaled.Encode())
+		assert.NoError(t, err)
+		assert.Equal(t, k, encoded)
 	}
 }
 
