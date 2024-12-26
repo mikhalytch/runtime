@@ -126,6 +126,14 @@ func TestMarshalForm(t *testing.T) {
 		encodings map[string]RequestBodyEncoding
 	}{
 		{"default", nil},
+		{"application/x-www-form-urlencoded", map[string]RequestBodyEncoding{
+			"application/x-www-form-urlencoded": {
+				ContentType: "application/x-www-form-urlencoded",
+				Style:       "form",
+				Explode:     func(v bool) *bool { return &v }(true),
+				Required:    func(v bool) *bool { return &v }(true),
+			},
+		}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
